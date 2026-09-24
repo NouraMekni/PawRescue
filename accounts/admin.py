@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import User
+from .models import BenevoleProfile, CitoyenProfile, User, VeterinaireProfile
 
 
 @admin.register(User)
@@ -14,3 +14,21 @@ class UserAdmin(DjangoUserAdmin):
     add_fieldsets = DjangoUserAdmin.add_fieldsets + (
         ("PawRescue", {"fields": ("role", "phone")}),
     )
+
+
+@admin.register(CitoyenProfile)
+class CitoyenProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "address")
+    search_fields = ("user__username", "address")
+
+
+@admin.register(BenevoleProfile)
+class BenevoleProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "is_available", "latitude", "longitude", "max_missions")
+    list_filter = ("is_available",)
+
+
+@admin.register(VeterinaireProfile)
+class VeterinaireProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "license_number", "is_available", "radius_km")
+    list_filter = ("is_available",)

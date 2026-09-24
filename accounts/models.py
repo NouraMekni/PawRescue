@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -20,3 +21,48 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.username} ({self.role})"
+
+
+class CitoyenProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="citoyen_profile",
+    )
+    address = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"Citoyen: {self.user.username}"
+
+
+class BenevoleProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="benevole_profile",
+    )
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    is_available = models.BooleanField(default=True)
+    max_missions = models.PositiveIntegerField(default=3)
+    bio = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"Bénévole: {self.user.username}"
+
+
+class VeterinaireProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="veterinaire_profile",
+    )
+    license_number = models.CharField(max_length=100, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    is_available = models.BooleanField(default=True)
+    specialties = models.TextField(blank=True)
+    radius_km = models.FloatField(default=15.0)
+
+    def __str__(self):
+        return f"Vétérinaire: {self.user.username}"

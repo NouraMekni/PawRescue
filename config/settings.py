@@ -30,6 +30,14 @@ INSTALLED_APPS = [
     # local
     "accounts",
     "core",
+    "shelters",
+    "animals",
+    "reports",
+    "missions",
+    "adoptions",
+    "donations",
+    "messaging",
+    "notifications",
 ]
 
 MIDDLEWARE = [

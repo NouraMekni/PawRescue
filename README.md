@@ -13,3 +13,7 @@
 #   http://127.0.0.1:8000/api/health/
 #   http://127.0.0.1:8000/api/docs/
 #   http://127.0.0.1:8000/admin/
+#
+# Domain apps (models ready):
+#   accounts, shelters, animals, reports, missions,
+#   adoptions, donations, messaging, notifications
