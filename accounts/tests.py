@@ -38,6 +38,7 @@ class AuthApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(login.status_code, 200)
+        self.assertIsNotNone(User.objects.get(email="vet@example.com").last_login)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
 
         me = self.client.patch(

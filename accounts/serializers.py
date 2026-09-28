@@ -1,3 +1,4 @@
+from django.contrib.auth.models import update_last_login
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from rest_framework import serializers
@@ -185,6 +186,7 @@ class EmailTokenObtainPairSerializer(serializers.Serializer):
             raise serializers.ValidationError("E-mail ou mot de passe incorrect.")
         if not user.is_active:
             raise serializers.ValidationError("Ce compte est désactivé.")
+        update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
         return {
             "refresh": str(refresh),
