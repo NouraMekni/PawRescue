@@ -18,6 +18,7 @@ class User(AbstractUser):
     )
     phone = models.CharField(max_length=20, blank=True)
     fcm_token = models.CharField(max_length=255, blank=True)
+    photo = models.ImageField(upload_to="users/photos/", blank=True, null=True)
 
     def __str__(self):
         return f"{self.username} ({self.role})"

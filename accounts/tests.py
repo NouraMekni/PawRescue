@@ -1,4 +1,8 @@
+from io import BytesIO
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework.test import APITestCase
 
 from animals.models import Species
@@ -77,3 +81,41 @@ class AuthApiTests(APITestCase):
         self.assertEqual(me.data["profile"]["name"], "Refuge Tunis")
         self.assertEqual(me.data["profile"]["accepted_species"], [species.id])
         self.assertTrue(User.objects.get(email="refuge@example.com").refuge)
+
+    def test_citoyen_can_complete_profile_and_photo(self):
+        register = self.client.post(
+            "/api/auth/register/",
+            {
+                "email": "sara@example.com",
+                "password": "StrongPass123",
+                "role": "citoyen",
+                "first_name": "Sara",
+                "last_name": "Ben Ali",
+            },
+            format="json",
+        )
+        self.assertEqual(register.data["user"]["first_name"], "Sara")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {register.data['access']}")
+
+        updated = self.client.patch(
+            "/api/auth/me/",
+            {
+                "phone": "+21620000000",
+                "profile": {"address": "Tunis centre"},
+            },
+            format="json",
+        )
+        self.assertEqual(updated.status_code, 200, updated.data)
+        self.assertEqual(updated.data["phone"], "+21620000000")
+        self.assertEqual(updated.data["profile"]["address"], "Tunis centre")
+
+        buffer = BytesIO()
+        Image.new("RGB", (8, 8), "green").save(buffer, format="JPEG")
+        photo = SimpleUploadedFile("face.jpg", buffer.getvalue(), content_type="image/jpeg")
+        with_photo = self.client.patch(
+            "/api/auth/me/",
+            {"photo": photo},
+            format="multipart",
+        )
+        self.assertEqual(with_photo.status_code, 200, with_photo.data)
+        self.assertIn("users/photos/", with_photo.data["photo"])

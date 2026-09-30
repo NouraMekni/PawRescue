@@ -1,3 +1,5 @@
+import os
+
 from django.contrib.auth.models import update_last_login
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
@@ -32,6 +34,8 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     role = serializers.ChoiceField(choices=PUBLIC_ROLES)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
     def validate_email(self, value):
@@ -51,6 +55,8 @@ class RegisterSerializer(serializers.Serializer):
             email=validated_data["email"],
             password=validated_data["password"],
             role=validated_data["role"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
             phone=validated_data.get("phone", ""),
         )
         if user.role == User.Role.CITOYEN:
@@ -120,8 +126,29 @@ class UserMeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("id", "username", "email", "role", "phone", "fcm_token", "profile")
+        fields = (
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "role",
+            "phone",
+            "photo",
+            "fcm_token",
+            "profile",
+        )
         read_only_fields = ("id", "username", "email", "role")
+
+    def validate_photo(self, value):
+        if value in (None, ""):
+            return value
+        extension = os.path.splitext(value.name)[1].lower()
+        if extension not in {".jpg", ".jpeg", ".png", ".webp"}:
+            raise serializers.ValidationError("Formats acceptés : JPG, PNG, WEBP.")
+        if value.size > 5 * 1024 * 1024:
+            raise serializers.ValidationError("La photo ne doit pas dépasser 5 Mo.")
+        return value
 
     def get_profile(self, user):
         if user.role == User.Role.CITOYEN and hasattr(user, "citoyen_profile"):
@@ -136,9 +163,15 @@ class UserMeSerializer(serializers.ModelSerializer):
 
     def update(self, user, validated_data):
         profile_data = self.initial_data.get("profile", serializers.empty)
+        user.first_name = validated_data.get("first_name", user.first_name)
+        user.last_name = validated_data.get("last_name", user.last_name)
         user.phone = validated_data.get("phone", user.phone)
         user.fcm_token = validated_data.get("fcm_token", user.fcm_token)
-        user.save(update_fields=["phone", "fcm_token"])
+        update_fields = ["first_name", "last_name", "phone", "fcm_token"]
+        if validated_data.get("photo"):
+            user.photo = validated_data["photo"]
+            update_fields.append("photo")
+        user.save(update_fields=update_fields)
 
         if profile_data is serializers.empty:
             return user
