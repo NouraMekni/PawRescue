@@ -26,6 +26,7 @@ def nearest_refuges(latitude, longitude, species=None, limit=5):
     ranked = [
         (haversine_km(latitude, longitude, refuge.latitude, refuge.longitude), refuge)
         for refuge in refuges
+        if refuge.latitude is not None and refuge.longitude is not None
     ]
     ranked.sort(key=lambda item: item[0])
     return ranked[:limit]

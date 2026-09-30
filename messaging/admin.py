@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Conversation, Message
+from .models import Conversation, Message, UserBlock
 
 
 class MessageInline(admin.TabularInline):
@@ -11,9 +11,15 @@ class MessageInline(admin.TabularInline):
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ("id", "refuge", "participant", "report", "animal", "updated_at")
+    list_display = ("id", "refuge", "participant", "status", "requested_by", "updated_at")
     search_fields = ("participant__username", "refuge__name")
     inlines = [MessageInline]
+
+
+@admin.register(UserBlock)
+class UserBlockAdmin(admin.ModelAdmin):
+    list_display = ("blocker", "blocked", "created_at")
+    search_fields = ("blocker__email", "blocked__email")
 
 
 @admin.register(Message)

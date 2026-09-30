@@ -2,11 +2,50 @@ from django.conf import settings
 from django.db import models
 
 
+class UserBlock(models.Model):
+    blocker = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="blocks_made",
+    )
+    blocked = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="blocks_received",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["blocker", "blocked"],
+                name="unique_user_block",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.blocker} a bloqué {self.blocked}"
+
+
 class Conversation(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "En attente"
+        ACCEPTED = "accepted", "Acceptée"
+        BLOCKED = "blocked", "Bloquée"
+
     refuge = models.ForeignKey(
         "shelters.Refuge",
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="conversations",
+    )
+    veterinaire = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="vet_conversations",
     )
     participant = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -26,6 +65,24 @@ class Conversation(models.Model):
         null=True,
         blank=True,
         related_name="conversations",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        related_name="message_requests",
+    )
+    blocked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="blocked_conversations",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

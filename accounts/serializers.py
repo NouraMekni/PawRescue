@@ -85,6 +85,7 @@ class VeterinaireProfileSerializer(serializers.ModelSerializer):
         model = VeterinaireProfile
         fields = (
             "license_number",
+            "address",
             "latitude",
             "longitude",
             "is_available",

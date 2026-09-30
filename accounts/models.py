@@ -59,6 +59,7 @@ class VeterinaireProfile(models.Model):
         related_name="veterinaire_profile",
     )
     license_number = models.CharField(max_length=100, blank=True)
+    address = models.CharField(max_length=255, blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     is_available = models.BooleanField(default=True)

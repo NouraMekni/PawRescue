@@ -9,6 +9,8 @@ class Notification(models.Model):
         ADOPTION_UPDATE = "adoption_update", "Mise à jour adoption"
         VACCINE_REMINDER = "vaccine_reminder", "Rappel vaccin"
         NEW_MESSAGE = "new_message", "Nouveau message"
+        REQUEST_ACCEPTED = "request_accepted", "Demande acceptée"
+        CONVERSATION_BLOCKED = "conversation_blocked", "Conversation bloquée"
         NEW_REPORT = "new_report", "Nouveau signalement"
         OTHER = "other", "Autre"
 
