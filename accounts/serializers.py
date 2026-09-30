@@ -1,3 +1,5 @@
+import os
+
 from django.contrib.auth.models import update_last_login
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
@@ -32,7 +34,34 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
     role = serializers.ChoiceField(choices=PUBLIC_ROLES)
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    license_number = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    governorate = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    clinic_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    address = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    verification_document = serializers.FileField(required=False)
+
+    def validate(self, attrs):
+        if attrs["role"] != User.Role.VETERINAIRE:
+            return attrs
+        errors = {}
+        for field in ("license_number", "governorate", "clinic_name", "phone"):
+            if not str(attrs.get(field) or "").strip():
+                errors[field] = "Ce champ est obligatoire."
+        document = attrs.get("verification_document")
+        if document is None:
+            errors["verification_document"] = "Le justificatif est obligatoire."
+        else:
+            extension = os.path.splitext(document.name)[1].lower()
+            if extension not in {".pdf", ".jpg", ".jpeg", ".png"}:
+                errors["verification_document"] = "Formats acceptés : PDF, JPG, PNG."
+            elif document.size > 5 * 1024 * 1024:
+                errors["verification_document"] = "Le fichier ne doit pas dépasser 5 Mo."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
     def validate_email(self, value):
         email = value.strip().lower()
@@ -51,6 +80,8 @@ class RegisterSerializer(serializers.Serializer):
             email=validated_data["email"],
             password=validated_data["password"],
             role=validated_data["role"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
             phone=validated_data.get("phone", ""),
         )
         if user.role == User.Role.CITOYEN:
@@ -58,7 +89,15 @@ class RegisterSerializer(serializers.Serializer):
         elif user.role == User.Role.BENEVOLE:
             BenevoleProfile.objects.create(user=user)
         elif user.role == User.Role.VETERINAIRE:
-            VeterinaireProfile.objects.create(user=user)
+            VeterinaireProfile.objects.create(
+                user=user,
+                license_number=validated_data.get("license_number", ""),
+                governorate=validated_data.get("governorate", ""),
+                clinic_name=validated_data.get("clinic_name", ""),
+                address=validated_data.get("address", ""),
+                verification_document=validated_data.get("verification_document"),
+                verification_status=VeterinaireProfile.VerificationStatus.PENDING,
+            )
         return user
 
 
@@ -79,12 +118,18 @@ class VeterinaireProfileSerializer(serializers.ModelSerializer):
         model = VeterinaireProfile
         fields = (
             "license_number",
+            "governorate",
+            "clinic_name",
+            "address",
+            "verification_status",
+            "verification_document",
             "latitude",
             "longitude",
             "is_available",
             "specialties",
             "radius_km",
         )
+        read_only_fields = ("verification_status", "verification_document")
 
 
 class RefugeProfileSerializer(serializers.ModelSerializer):
@@ -120,7 +165,17 @@ class UserMeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("id", "username", "email", "role", "phone", "fcm_token", "profile")
+        fields = (
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "role",
+            "phone",
+            "fcm_token",
+            "profile",
+        )
         read_only_fields = ("id", "username", "email", "role")
 
     def get_profile(self, user):
@@ -186,6 +241,15 @@ class EmailTokenObtainPairSerializer(serializers.Serializer):
             raise serializers.ValidationError("E-mail ou mot de passe incorrect.")
         if not user.is_active:
             raise serializers.ValidationError("Ce compte est désactivé.")
+        if user.role == User.Role.VETERINAIRE:
+            profile = getattr(user, "veterinaire_profile", None)
+            status = getattr(profile, "verification_status", VeterinaireProfile.VerificationStatus.PENDING)
+            if status == VeterinaireProfile.VerificationStatus.PENDING:
+                raise serializers.ValidationError(
+                    "Votre compte est en attente de vérification par un administrateur."
+                )
+            if status == VeterinaireProfile.VerificationStatus.REJECTED:
+                raise serializers.ValidationError("Votre compte vétérinaire a été refusé.")
         update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
         return {

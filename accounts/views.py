@@ -1,10 +1,12 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from .models import User, VeterinaireProfile
 from .serializers import (
     EmailTokenObtainPairSerializer,
     RegisterSerializer,
@@ -14,12 +16,25 @@ from .serializers import (
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(request=RegisterSerializer, responses={201: UserMeSerializer})
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        profile = getattr(user, "veterinaire_profile", None)
+        if user.role == User.Role.VETERINAIRE and (
+            profile is None
+            or profile.verification_status != VeterinaireProfile.VerificationStatus.APPROVED
+        ):
+            return Response(
+                {
+                    "user": UserMeSerializer(user).data,
+                    "detail": "Votre compte est en attente de vérification par un administrateur.",
+                },
+                status=status.HTTP_201_CREATED,
+            )
         tokens = EmailTokenObtainPairSerializer(
             data={"email": user.email, "password": request.data.get("password", "")}
         )

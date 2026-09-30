@@ -30,5 +30,14 @@ class BenevoleProfileAdmin(admin.ModelAdmin):
 
 @admin.register(VeterinaireProfile)
 class VeterinaireProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "license_number", "is_available", "radius_km")
-    list_filter = ("is_available",)
+    list_display = (
+        "user",
+        "license_number",
+        "governorate",
+        "clinic_name",
+        "verification_status",
+        "is_available",
+    )
+    list_filter = ("verification_status", "is_available", "governorate")
+    search_fields = ("user__email", "license_number", "clinic_name")
+    readonly_fields = ("verification_document",)

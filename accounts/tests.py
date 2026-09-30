@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 
+from accounts.models import VeterinaireProfile
 from animals.models import Species
 
 User = get_user_model()
@@ -26,12 +28,43 @@ class AuthApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_login_with_email_and_patch_profile(self):
-        self.client.post(
+    def test_pending_vet_cannot_login_until_approved(self):
+        document = SimpleUploadedFile("ordre.pdf", b"%PDF-1.4", content_type="application/pdf")
+        created = self.client.post(
             "/api/auth/register/",
-            {"email": "vet@example.com", "password": "StrongPass123", "role": "veterinaire"},
+            {
+                "email": "vet@example.com",
+                "password": "StrongPass123",
+                "role": "veterinaire",
+                "first_name": "Leila",
+                "last_name": "Vet",
+                "phone": "+21698765432",
+                "license_number": "4582",
+                "governorate": "Tunis",
+                "clinic_name": "Clinique VetCare",
+                "address": "Avenue Habib Bourguiba",
+                "verification_document": document,
+            },
+            format="multipart",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertNotIn("access", created.data)
+        self.assertEqual(
+            created.data["user"]["profile"]["verification_status"],
+            "pending",
+        )
+
+        blocked = self.client.post(
+            "/api/auth/token/",
+            {"email": "vet@example.com", "password": "StrongPass123"},
             format="json",
         )
+        self.assertEqual(blocked.status_code, 400)
+
+        profile = VeterinaireProfile.objects.get(user__email="vet@example.com")
+        profile.verification_status = VeterinaireProfile.VerificationStatus.APPROVED
+        profile.save(update_fields=["verification_status"])
+
         login = self.client.post(
             "/api/auth/token/",
             {"email": "vet@example.com", "password": "StrongPass123"},

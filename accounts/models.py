@@ -52,12 +52,30 @@ class BenevoleProfile(models.Model):
 
 
 class VeterinaireProfile(models.Model):
+    class VerificationStatus(models.TextChoices):
+        PENDING = "pending", "En attente"
+        APPROVED = "approved", "Approuvé"
+        REJECTED = "rejected", "Refusé"
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="veterinaire_profile",
     )
     license_number = models.CharField(max_length=100, blank=True)
+    governorate = models.CharField(max_length=50, blank=True)
+    clinic_name = models.CharField(max_length=200, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    verification_document = models.FileField(
+        upload_to="veterinaires/documents/",
+        blank=True,
+        null=True,
+    )
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.PENDING,
+    )
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     is_available = models.BooleanField(default=True)
