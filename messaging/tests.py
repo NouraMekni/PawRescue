@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
+from accounts.models import VeterinaireProfile
 from shelters.models import Refuge
 
 User = get_user_model()
@@ -127,6 +128,10 @@ class MessagingApiTests(APITestCase):
         self.assertEqual(created.data["status"], "pending")
         self.assertEqual(created.data["veterinaire_name"], "Leila Vet")
 
+        VeterinaireProfile.objects.create(
+            user=vet,
+            verification_status=VeterinaireProfile.VerificationStatus.APPROVED,
+        )
         self.login("leila@test.tn")
         inbox = self.client.get("/api/messaging/conversations/")
         self.assertEqual(len(inbox.data), 1)
