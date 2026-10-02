@@ -44,6 +44,7 @@ class ReportApiTests(APITestCase):
             name="Refuge Tunis",
             latitude=36.8,
             longitude=10.18,
+            is_verified=True,
         )
         self.refuge.accepted_species.add(self.chien)
         far_user = User.objects.create_user(

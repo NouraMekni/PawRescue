@@ -35,6 +35,15 @@ class RegisterView(APIView):
                 },
                 status=status.HTTP_201_CREATED,
             )
+        refuge = getattr(user, "refuge", None)
+        if user.role == User.Role.REFUGE and (refuge is None or not refuge.is_verified):
+            return Response(
+                {
+                    "user": UserMeSerializer(user).data,
+                    "detail": "Votre compte est en attente de vérification par un administrateur.",
+                },
+                status=status.HTTP_201_CREATED,
+            )
         tokens = EmailTokenObtainPairSerializer(
             data={"email": user.email, "password": request.data.get("password", "")}
         )

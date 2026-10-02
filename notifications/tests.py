@@ -29,6 +29,7 @@ class NotificationApiTests(APITestCase):
             name="Refuge Tunis",
             latitude=36.8,
             longitude=10.18,
+            is_verified=True,
         )
 
     def login(self, email):

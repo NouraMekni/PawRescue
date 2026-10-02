@@ -41,27 +41,51 @@ class RegisterSerializer(serializers.Serializer):
     governorate = serializers.CharField(required=False, allow_blank=True, max_length=50)
     clinic_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
     address = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    name = serializers.CharField(required=False, allow_blank=True, max_length=200)
+    structure = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    rne = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    official_email = serializers.EmailField(required=False, allow_blank=True)
+    representative_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
     verification_document = serializers.FileField(required=False)
 
     def validate(self, attrs):
-        if attrs["role"] != User.Role.VETERINAIRE:
-            return attrs
+        if attrs["role"] == User.Role.VETERINAIRE:
+            return self._validate_veterinaire(attrs)
+        if attrs["role"] == User.Role.REFUGE:
+            return self._validate_refuge(attrs)
+        return attrs
+
+    def _validate_veterinaire(self, attrs):
         errors = {}
         for field in ("license_number", "governorate", "clinic_name", "phone"):
             if not str(attrs.get(field) or "").strip():
                 errors[field] = "Ce champ est obligatoire."
-        document = attrs.get("verification_document")
-        if document is None:
-            errors["verification_document"] = "Le justificatif est obligatoire."
-        else:
-            extension = os.path.splitext(document.name)[1].lower()
-            if extension not in {".pdf", ".jpg", ".jpeg", ".png"}:
-                errors["verification_document"] = "Formats acceptés : PDF, JPG, PNG."
-            elif document.size > 5 * 1024 * 1024:
-                errors["verification_document"] = "Le fichier ne doit pas dépasser 5 Mo."
+        self._validate_document(attrs.get("verification_document"), errors)
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+    def _validate_refuge(self, attrs):
+        errors = {}
+        for field in ("name", "structure", "rne", "governorate", "address", "phone", "official_email", "representative_name"):
+            if not str(attrs.get(field) or "").strip():
+                errors[field] = "Ce champ est obligatoire."
+        if attrs.get("structure") not in ("Refuge", "Association"):
+            errors["structure"] = "Type de structure invalide."
+        self._validate_document(attrs.get("verification_document"), errors)
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
+    def _validate_document(self, document, errors):
+        if document is None:
+            errors["verification_document"] = "Le justificatif est obligatoire."
+            return
+        extension = os.path.splitext(document.name)[1].lower()
+        if extension not in {".pdf", ".jpg", ".jpeg", ".png"}:
+            errors["verification_document"] = "Formats acceptés : PDF, JPG, PNG."
+        elif document.size > 5 * 1024 * 1024:
+            errors["verification_document"] = "Le fichier ne doit pas dépasser 5 Mo."
 
     def validate_email(self, value):
         email = value.strip().lower()
@@ -98,6 +122,20 @@ class RegisterSerializer(serializers.Serializer):
                 verification_document=validated_data.get("verification_document"),
                 verification_status=VeterinaireProfile.VerificationStatus.PENDING,
             )
+        elif user.role == User.Role.REFUGE:
+            Refuge.objects.create(
+                user=user,
+                name=validated_data.get("name", ""),
+                structure=validated_data.get("structure", ""),
+                rne=validated_data.get("rne", ""),
+                governorate=validated_data.get("governorate", ""),
+                address=validated_data.get("address", ""),
+                phone=validated_data.get("phone", ""),
+                official_email=validated_data.get("official_email", ""),
+                representative_name=validated_data.get("representative_name", ""),
+                verification_document=validated_data.get("verification_document"),
+                is_verified=False,
+            )
         return user
 
 
@@ -133,6 +171,7 @@ class VeterinaireProfileSerializer(serializers.ModelSerializer):
 
 
 class RefugeProfileSerializer(serializers.ModelSerializer):
+    verification_status = serializers.SerializerMethodField()
     accepted_species = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Species.objects.all(),
@@ -143,6 +182,9 @@ class RefugeProfileSerializer(serializers.ModelSerializer):
         model = Refuge
         fields = (
             "name",
+            "structure",
+            "rne",
+            "governorate",
             "address",
             "latitude",
             "longitude",
@@ -151,7 +193,15 @@ class RefugeProfileSerializer(serializers.ModelSerializer):
             "capacity",
             "action_radius_km",
             "accepted_species",
+            "official_email",
+            "representative_name",
+            "verification_status",
+            "verification_document",
         )
+        read_only_fields = ("verification_status", "verification_document")
+
+    def get_verification_status(self, refuge):
+        return "approved" if refuge.is_verified else "pending"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -267,6 +317,12 @@ class EmailTokenObtainPairSerializer(serializers.Serializer):
                 )
             if status == VeterinaireProfile.VerificationStatus.REJECTED:
                 raise serializers.ValidationError("Votre compte vétérinaire a été refusé.")
+        if user.role == User.Role.REFUGE:
+            refuge = getattr(user, "refuge", None)
+            if refuge is None or not refuge.is_verified:
+                raise serializers.ValidationError(
+                    "Votre compte refuge est en attente de vérification par un administrateur."
+                )
         update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
         return {
