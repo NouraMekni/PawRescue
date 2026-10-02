@@ -1,0 +1,19 @@
+services:
+  backend:
+    build: .
+    container_name: paw-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - sqlite_data:/app/data
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      daphne -b 0.0.0.0 -p 8000 config.asgi:application
+      "
+
+volumes:
+  sqlite_data:

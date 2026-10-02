@@ -9,6 +9,9 @@ class Refuge(models.Model):
         related_name="refuge",
     )
     name = models.CharField(max_length=200)
+    structure = models.CharField(max_length=50, blank=True)
+    rne = models.CharField(max_length=100, blank=True)
+    governorate = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
@@ -17,6 +20,13 @@ class Refuge(models.Model):
     capacity = models.PositiveIntegerField(default=0)
     action_radius_km = models.FloatField(default=20.0)
     is_verified = models.BooleanField(default=False)
+    official_email = models.EmailField(blank=True)
+    representative_name = models.CharField(max_length=200, blank=True)
+    verification_document = models.FileField(
+        upload_to="refuges/documents/",
+        blank=True,
+        null=True,
+    )
     logo = models.ImageField(upload_to="refuges/logos/", blank=True, null=True)
     accepted_species = models.ManyToManyField(
         "animals.Species",

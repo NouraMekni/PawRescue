@@ -88,13 +88,13 @@ class AuthApiTests(APITestCase):
         self.assertEqual(me.data["profile"]["radius_km"], 25)
 
     def test_refuge_profile_is_created_from_me(self):
-        register = self.client.post(
-            "/api/auth/register/",
-            {"email": "refuge@example.com", "password": "StrongPass123", "role": "refuge"},
-            format="json",
+        user = User.objects.create_user(
+            username="refuge",
+            email="refuge@example.com",
+            password="StrongPass123",
+            role=User.Role.REFUGE,
         )
-        self.assertIsNone(register.data["user"]["profile"])
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {register.data['access']}")
+        self.client.force_authenticate(user=user)
 
         species = Species.objects.create(name="Chien")
         me = self.client.patch(
@@ -113,6 +113,51 @@ class AuthApiTests(APITestCase):
         self.assertEqual(me.data["profile"]["name"], "Refuge Tunis")
         self.assertEqual(me.data["profile"]["accepted_species"], [species.id])
         self.assertTrue(User.objects.get(email="refuge@example.com").refuge)
+
+    def test_pending_refuge_cannot_login_until_verified(self):
+        document = SimpleUploadedFile("rne.pdf", b"%PDF-1.4", content_type="application/pdf")
+        created = self.client.post(
+            "/api/auth/register/",
+            {
+                "email": "shelter@example.com",
+                "password": "StrongPass123",
+                "role": "refuge",
+                "first_name": "Nadia",
+                "last_name": "Refuge",
+                "phone": "+21698765432",
+                "name": "Refuge Tunis",
+                "structure": "Refuge",
+                "rne": "1234567A",
+                "governorate": "Tunis",
+                "address": "Avenue Habib Bourguiba",
+                "official_email": "contact@refuge.tn",
+                "representative_name": "Nadia Ben Ali",
+                "verification_document": document,
+            },
+            format="multipart",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertNotIn("access", created.data)
+        self.assertEqual(created.data["user"]["profile"]["verification_status"], "pending")
+
+        blocked = self.client.post(
+            "/api/auth/token/",
+            {"email": "shelter@example.com", "password": "StrongPass123"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, 400)
+
+        refuge = User.objects.get(email="shelter@example.com").refuge
+        refuge.is_verified = True
+        refuge.save(update_fields=["is_verified"])
+
+        login = self.client.post(
+            "/api/auth/token/",
+            {"email": "shelter@example.com", "password": "StrongPass123"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertIn("access", login.data)
 
     def test_citoyen_can_complete_profile_and_photo(self):
         register = self.client.post(
