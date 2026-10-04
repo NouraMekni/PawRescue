@@ -1,12 +1,20 @@
 from io import BytesIO
 
+from django.contrib import admin as django_admin
 from django.contrib.auth import get_user_model
+from django.contrib.messages.middleware import MessageMiddleware
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import RequestFactory, override_settings
 from PIL import Image
 from rest_framework.test import APITestCase
 
+from accounts.admin import VeterinaireProfileAdmin
 from accounts.models import VeterinaireProfile
 from animals.models import Species
+from shelters.admin import RefugeAdmin
+from shelters.models import Refuge
 
 User = get_user_model()
 
@@ -196,3 +204,75 @@ class AuthApiTests(APITestCase):
         )
         self.assertEqual(with_photo.status_code, 200, with_photo.data)
         self.assertIn("users/photos/", with_photo.data["photo"])
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class ApprovalEmailTests(APITestCase):
+    def setUp(self):
+        self.admin_user = User.objects.create_superuser(
+            username="admin",
+            email="admin@example.com",
+            password="StrongPass123",
+        )
+
+    def _request(self):
+        request = RequestFactory().post("/admin/")
+        request.user = self.admin_user
+        SessionMiddleware(lambda req: None).process_request(request)
+        request.session.save()
+        MessageMiddleware(lambda req: None).process_request(request)
+        return request
+
+    def test_approving_a_vet_sends_one_email(self):
+        vet = User.objects.create_user(
+            username="leila",
+            email="leila@example.com",
+            password="StrongPass123",
+            role=User.Role.VETERINAIRE,
+            first_name="Leila",
+        )
+        profile = VeterinaireProfile.objects.create(user=vet)
+        admin = VeterinaireProfileAdmin(VeterinaireProfile, django_admin.site)
+
+        admin.save_model(self._request(), profile, None, True)
+        self.assertEqual(len(mail.outbox), 0)
+
+        profile.verification_status = VeterinaireProfile.VerificationStatus.APPROVED
+        request = self._request()
+        admin.save_model(request, profile, None, True)
+        admin.send_queued_approval_email(request)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["leila@example.com"])
+        self.assertEqual(mail.outbox[0].subject, "Vérification accordée")
+        self.assertIn("Leila", mail.outbox[0].body)
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn("cid:animals", html)
+        self.assertIn("cid:paw-logo", html)
+        self.assertIn("#1F8A45", html)
+        self.assertNotIn("Accéder à mon compte", html)
+
+        profile.clinic_name = "VetCare"
+        admin.save_model(self._request(), profile, None, True)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_verifying_a_refuge_sends_one_email(self):
+        owner = User.objects.create_user(
+            username="refuge",
+            email="refuge@example.com",
+            password="StrongPass123",
+            role=User.Role.REFUGE,
+            first_name="Nadia",
+        )
+        refuge = Refuge.objects.create(user=owner, name="Refuge Tunis")
+        admin = RefugeAdmin(Refuge, django_admin.site)
+
+        refuge.is_verified = True
+        request = self._request()
+        admin.save_model(request, refuge, None, True)
+        admin.send_queued_approval_email(request)
+        self.assertEqual(mail.outbox[0].to, ["refuge@example.com"])
+        self.assertIn("refuge", mail.outbox[0].body)
+
+        refuge.description = "Accueil"
+        admin.save_model(self._request(), refuge, None, True)
+        self.assertEqual(len(mail.outbox), 1)
