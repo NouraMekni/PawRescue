@@ -11,8 +11,11 @@ urlpatterns = [
     path("api/reports/", include("reports.urls")),
     path("api/messaging/", include("messaging.urls")),
     path("api/notifications/", include("notifications.urls")),
+    path("api/adoptions/", include("adoptions.urls")),
+    path("api/animals/", include("animals.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger"),
+    
 ]
 
 if settings.DEBUG:
