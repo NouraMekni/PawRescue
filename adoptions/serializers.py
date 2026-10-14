@@ -1,8 +1,8 @@
-from django.db import transaction
 from rest_framework import serializers
 
 from animals.models import Animal, AnimalPhoto
 from .models import AdoptionRequest
+from .services import can_review, can_cancel, create_adoption_request
 
 
 class AdoptionAnimalPhotoSerializer(serializers.ModelSerializer):
@@ -55,6 +55,23 @@ class AdoptionAnimalSerializer(serializers.ModelSerializer):
 
 
 class AdoptionRequestSerializer(serializers.ModelSerializer):
+    applicant_name = serializers.SerializerMethodField()
+    applicant_email = serializers.EmailField(source="applicant.email", read_only=True)
+    applicant_phone = serializers.CharField(source="applicant.phone", read_only=True)
+    can_review = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+
+    def get_applicant_name(self, obj):
+        return obj.applicant.get_full_name().strip() or obj.applicant.username
+
+    def get_can_review(self, obj):
+        request = self.context.get("request")
+        return bool(request and can_review(request.user, obj))
+
+    def get_can_cancel(self, obj):
+        request = self.context.get("request")
+        return bool(request and can_cancel(request.user, obj))
+
     animal_details = AdoptionAnimalSerializer(
         source="animal",
         read_only=True,
@@ -89,6 +106,11 @@ class AdoptionRequestSerializer(serializers.ModelSerializer):
             "animal_details",
             "applicant",
             "applicant_username",
+            "applicant_name",
+            "applicant_email",
+            "applicant_phone",
+            "can_review",
+            "can_cancel",
             "refuge",
             "refuge_name",
             "message",
@@ -165,21 +187,8 @@ class AdoptionRequestCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
-    @transaction.atomic
     def create(self, validated_data):
-        request = self.context["request"]
-
-        animal = validated_data["animal"]
-
-        adoption = AdoptionRequest.objects.create(
-            animal=animal,
-            applicant=request.user,
-            refuge=animal.refuge,
-            message=validated_data.get("message", ""),
-            status=AdoptionRequest.Status.PENDING,
-        )
-
-        return adoption
+        return create_adoption_request(applicant=self.context["request"].user, **validated_data)
 
 
 class AdoptionReviewSerializer(serializers.Serializer):
