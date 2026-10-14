@@ -1,5 +1,6 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from django.db import transaction
 
 from .models import Notification
 from .serializers import NotificationSerializer
@@ -18,8 +19,10 @@ def notify(*, recipient, type, title, body="", data=None):
         data=data or {},
         channel=Notification.Channel.IN_APP,
     )
-    layer = get_channel_layer()
-    if layer is not None:
+    def broadcast():
+        layer = get_channel_layer()
+        if layer is None:
+            return
         async_to_sync(layer.group_send)(
             f"user-{recipient.id}",
             {
@@ -30,4 +33,5 @@ def notify(*, recipient, type, title, body="", data=None):
                 },
             },
         )
+    transaction.on_commit(broadcast, robust=True)
     return notification
